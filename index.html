@@ -1,0 +1,1653 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1">
+  <title>🍱 マイ・コック弁当注文</title>
+  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --primary: #E8702A;
+      --primary-dark: #C45A18;
+      --primary-light: #FFF0E6;
+      --bg: #F5F5F5;
+      --card: #FFFFFF;
+      --text: #1A1A1A;
+      --muted: #888888;
+      --border: #E0E0E0;
+      --success: #27AE60;
+      --success-light: #D4EDDA;
+      --danger: #E74C3C;
+      --danger-light: #FDECEA;
+      --warning: #F39C12;
+      --warning-light: #FEF9E7;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── HEADER ─── */
+    .header {
+      background: var(--primary);
+      color: white;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+      box-shadow: 0 3px 10px rgba(232,112,42,0.35);
+      z-index: 50;
+    }
+    .header-left .title {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+    .header-left .date-line {
+      font-size: 12px;
+      opacity: 0.9;
+      margin-top: 2px;
+    }
+    .settings-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      font-size: 22px;
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .settings-btn:active { background: rgba(255,255,255,0.35); }
+
+    /* ─── SCROLL AREA ─── */
+    .scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 14px 14px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* ─── CARD ─── */
+    .card {
+      background: var(--card);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    }
+
+    /* ─── COUNT CARD ─── */
+    .count-card {
+      text-align: center;
+      padding: 20px 18px 16px;
+    }
+    .count-label { font-size: 13px; color: var(--muted); font-weight: 500; }
+
+    /* 日付ラベル（大きく表示） */
+    .order-date-label {
+      font-size: 26px;
+      font-weight: 900;
+      color: var(--text);
+      letter-spacing: -0.5px;
+      margin-bottom: 2px;
+    }
+    .order-date-label.tomorrow { color: var(--primary); }
+
+    /* 受付時間外バナー */
+    .closed-notice {
+      display: none;
+      margin-top: 10px;
+      background: #FDE8E8;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 14px; font-weight: 600;
+      color: #8B1A1A;
+      align-items: center; justify-content: center; gap: 6px;
+    }
+
+    .count-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 6px;
+      margin: 4px 0 8px;
+    }
+    .count-number {
+      font-size: 80px;
+      font-weight: 900;
+      color: var(--primary);
+      line-height: 1;
+      letter-spacing: -4px;
+      transition: transform 0.15s;
+    }
+    .count-number.bump {
+      animation: bump 0.25s ease;
+    }
+    @keyframes bump {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+    .count-unit { font-size: 22px; color: var(--muted); font-weight: 600; margin-bottom: 12px; }
+    .deadline-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--warning-light);
+      border: 1px solid #F9CA24;
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-size: 13px; color: #7A5C00; font-weight: 600;
+    }
+
+    /* ─── STATUS BAR ─── */
+    .status-bar {
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-size: 14px; font-weight: 600;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .status-bar.pending { background: var(--warning-light); color: #7A5C00; }
+    .status-bar.sent    { background: var(--success-light); color: #155724; }
+
+    /* ─── PICKER CARD ─── */
+    .picker-card { padding: 16px 18px 14px; }
+    .picker-label {
+      font-size: 13px; color: var(--muted); font-weight: 600;
+      text-align: center; margin-bottom: 12px; letter-spacing: 0.5px;
+    }
+
+    /* Drum-roll picker container */
+    .drum-wrapper {
+      position: relative;
+      height: 190px;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+
+    /* Center selection highlight */
+    .drum-selector {
+      position: absolute;
+      top: 50%; transform: translateY(-50%);
+      left: 10px; right: 10px;
+      height: 52px;
+      background: var(--primary-light);
+      border-radius: 10px;
+      border-top: 2px solid var(--primary);
+      border-bottom: 2px solid var(--primary);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Fade masks */
+    .drum-mask-top, .drum-mask-bottom {
+      position: absolute; left: 0; right: 0; height: 68px;
+      pointer-events: none; z-index: 2;
+    }
+    .drum-mask-top    { top: 0;    background: linear-gradient(to bottom, white 20%, transparent); }
+    .drum-mask-bottom { bottom: 0; background: linear-gradient(to top,   white 20%, transparent); }
+
+    /* The scrollable list */
+    .drum-scroll {
+      height: 100%;
+      overflow-y: scroll;
+      scroll-snap-type: y mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .drum-scroll::-webkit-scrollbar { display: none; }
+
+    .drum-pad { height: 69px; flex-shrink: 0; }
+
+    .drum-item {
+      height: 52px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      scroll-snap-align: center;
+      transition: color 0.1s, font-size 0.1s, font-weight 0.1s, opacity 0.1s;
+      cursor: pointer;
+      user-select: none;
+    }
+    .drum-item.is-center {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--primary);
+    }
+    .drum-item.is-near { font-size: 21px; font-weight: 500; color: #555; }
+    .drum-item.is-far  { font-size: 17px; font-weight: 400; color: #aaa; }
+
+    /* Add button */
+    .add-btn {
+      width: 100%; margin-top: 14px;
+      padding: 15px;
+      background: var(--primary);
+      color: white; border: none;
+      border-radius: 14px;
+      font-size: 17px; font-weight: 700;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: background 0.15s, transform 0.1s;
+      box-shadow: 0 4px 14px rgba(232,112,42,0.35);
+    }
+    .add-btn:active { background: var(--primary-dark); transform: scale(0.98); }
+    .add-btn.already {
+      background: #A8A8A8;
+      box-shadow: none;
+    }
+
+    /* ─── ORDERS CARD ─── */
+    .orders-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 14px;
+    }
+    .orders-title { font-size: 15px; font-weight: 700; }
+    .orders-badge {
+      background: var(--primary); color: white;
+      border-radius: 12px; padding: 3px 13px;
+      font-size: 14px; font-weight: 700;
+    }
+    .order-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .order-row:last-child { border-bottom: none; }
+    .order-name-text {
+      font-size: 17px; display: flex; align-items: center; gap: 9px;
+    }
+    .cancel-btn {
+      background: none;
+      border: 1.5px solid var(--danger);
+      color: var(--danger);
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .cancel-btn:active { background: var(--danger); color: white; }
+    .empty-msg {
+      text-align: center; color: var(--muted);
+      padding: 24px 0; font-size: 15px;
+    }
+
+    /* ─── SEND BUTTON ─── */
+    .send-btn {
+      width: 100%;
+      padding: 18px;
+      background: var(--success);
+      color: white; border: none;
+      border-radius: 16px;
+      font-size: 19px; font-weight: 800;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      box-shadow: 0 5px 18px rgba(39,174,96,0.38);
+      transition: background 0.15s, transform 0.1s;
+    }
+    .send-btn:active { transform: scale(0.98); }
+    .send-btn:disabled {
+      background: #B0B0B0;
+      box-shadow: none;
+      cursor: default;
+    }
+    .send-btn.sent { background: #2ECC71; }
+
+    /* ─── BOTTOM SPACER ─── */
+    .bottom-spacer { height: 10px; }
+
+    /* ─── SETTINGS MODAL ─── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 200;
+      display: none; align-items: flex-end;
+      animation: fadeIn 0.2s ease;
+    }
+    .modal-overlay.open { display: flex; }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+    .modal-sheet {
+      background: white;
+      border-radius: 24px 24px 0 0;
+      width: 100%; max-height: 85vh;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      padding: 0 20px 36px;
+      animation: slideUp 0.3s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+
+    .modal-drag-bar {
+      width: 44px; height: 4px;
+      background: #DDD; border-radius: 2px;
+      margin: 14px auto 0;
+    }
+
+    .modal-title { font-size: 20px; font-weight: 800; margin: 18px 0 16px; }
+    .section-label {
+      font-size: 12px; font-weight: 700; letter-spacing: 0.8px;
+      color: var(--muted); text-transform: uppercase;
+      margin: 20px 0 10px;
+    }
+
+    .emp-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .emp-name { font-size: 17px; }
+    .emp-del-btn {
+      background: none; border: none;
+      color: var(--danger); font-size: 22px;
+      cursor: pointer; padding: 4px 8px; line-height: 1;
+    }
+
+    .add-emp-row {
+      display: flex; gap: 10px; margin-top: 12px;
+    }
+    .add-emp-input {
+      flex: 1; padding: 11px 14px;
+      border: 2px solid var(--border);
+      border-radius: 10px; font-size: 16px; outline: none;
+      font-family: inherit;
+    }
+    .add-emp-input:focus { border-color: var(--primary); }
+    .add-emp-btn {
+      padding: 11px 18px;
+      background: var(--primary); color: white;
+      border: none; border-radius: 10px;
+      font-size: 15px; font-weight: 700; cursor: pointer;
+    }
+
+    .config-field { margin-bottom: 12px; }
+    .config-field label {
+      display: block; font-size: 12px; color: var(--muted);
+      font-weight: 600; margin-bottom: 5px;
+    }
+    .config-field input {
+      width: 100%; padding: 11px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px; font-size: 16px; outline: none;
+      font-family: inherit;
+    }
+    .config-field input:focus { border-color: var(--primary); }
+
+    .save-cfg-btn {
+      width: 100%; padding: 14px;
+      background: var(--primary); color: white;
+      border: none; border-radius: 12px;
+      font-size: 16px; font-weight: 700; cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .reset-btn {
+      width: 100%; padding: 13px;
+      background: none;
+      border: 1.5px solid var(--danger); color: var(--danger);
+      border-radius: 12px; font-size: 15px; font-weight: 600;
+      cursor: pointer; margin-top: 16px;
+    }
+
+    /* ─── TOAST ─── */
+    .toast {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: rgba(20,20,20,0.88);
+      color: white; padding: 12px 24px;
+      border-radius: 24px; font-size: 15px;
+      z-index: 9999; white-space: nowrap;
+      transition: transform 0.28s cubic-bezier(.34,1.56,.64,1);
+      pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ─── SUCCESS POPUP ─── */
+    .success-popup {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      display: none; align-items: center; justify-content: center;
+    }
+    .success-popup.show { display: flex; }
+    .success-box {
+      background: white; border-radius: 24px;
+      padding: 36px 32px; text-align: center;
+      width: 88%; max-width: 340px;
+      animation: popIn 0.3s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes popIn {
+      from { transform: scale(0.75); opacity: 0; }
+      to   { transform: scale(1);    opacity: 1; }
+    }
+    .success-icon  { font-size: 64px; margin-bottom: 12px; }
+    .success-title { font-size: 24px; font-weight: 800; color: var(--success); }
+    .success-sub   { font-size: 15px; color: var(--muted); margin-top: 8px; }
+    .success-close {
+      margin-top: 24px; padding: 13px 36px;
+      background: var(--primary); color: white;
+      border: none; border-radius: 14px;
+      font-size: 16px; font-weight: 700; cursor: pointer;
+    }
+
+    /* ─── MACHINE-READABLE (hidden) ─── */
+    #auto-data { display: none; }
+
+    /* ─── MONTHLY REPORT MODAL ─── */
+    .report-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 500;
+      display: none; flex-direction: column;
+    }
+    .report-overlay.open { display: flex; }
+    .report-inner {
+      background: white; flex: 1;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .report-header {
+      background: var(--primary); color: white;
+      padding: 16px 18px;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-shrink: 0;
+    }
+    .report-header-title { font-size: 18px; font-weight: 800; }
+    .report-close-btn {
+      background: rgba(255,255,255,0.2); border: none; color: white;
+      font-size: 18px; font-weight: 700;
+      width: 38px; height: 38px; border-radius: 10px; cursor: pointer;
+    }
+    .report-controls {
+      padding: 12px 18px; flex-shrink: 0;
+      display: flex; gap: 10px; align-items: center;
+      border-bottom: 1px solid var(--border); flex-wrap: wrap;
+    }
+    .report-period-label { font-size: 15px; font-weight: 700; flex: 1; }
+    .report-print-btn {
+      padding: 8px 18px; background: var(--success); color: white;
+      border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+    .report-scroll { flex: 1; overflow: auto; padding: 16px; }
+    .report-table {
+      border-collapse: collapse; font-size: 13px; white-space: nowrap;
+    }
+    .report-table th, .report-table td {
+      border: 1px solid #CCC; padding: 6px 8px;
+      text-align: center; min-width: 30px;
+    }
+    .report-table th { background: #F0F0F0; font-weight: 700; }
+    .report-table .name-col {
+      text-align: left; min-width: 80px; font-weight: 600;
+      position: sticky; left: 0; background: white; z-index: 2;
+    }
+    .report-table th.name-col { background: #F0F0F0; z-index: 3; }
+    .report-table .total-col {
+      font-weight: 800; color: var(--primary-dark);
+      background: #FFF0E6; position: sticky; right: 0;
+    }
+    .report-table .ordered { color: var(--primary); font-weight: 700; font-size: 15px; }
+    .report-table .weekend-col { background: #FFFBE6; }
+    .report-table .total-row td { background: #EAF2FF; font-weight: 700; color: #1A5276; }
+    .report-empty { text-align: center; padding: 48px; color: var(--muted); font-size: 15px; }
+
+    /* ─── ORDER EDITOR MODAL ─── */
+    .editor-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 400;
+      display: none; align-items: flex-end;
+    }
+    .editor-overlay.open { display: flex; }
+    .editor-sheet {
+      background: white; border-radius: 24px 24px 0 0;
+      width: 100%; max-height: 80vh;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      padding: 0 20px 36px;
+      animation: slideUp 0.3s ease;
+    }
+    .editor-date-label { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
+    .editor-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 11px 4px; border-bottom: 1px solid var(--border);
+    }
+    .editor-name { flex: 1; font-size: 17px; }
+    .editor-edit-btn {
+      background: none; border: 1.5px solid #3498DB; color: #3498DB;
+      border-radius: 8px; padding: 5px 11px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .editor-del-btn {
+      background: none; border: 1.5px solid var(--danger); color: var(--danger);
+      border-radius: 8px; padding: 5px 11px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .editor-add-row { display: flex; gap: 10px; margin-top: 14px; }
+    .editor-add-input {
+      flex: 1; padding: 11px 14px;
+      border: 2px solid var(--border); border-radius: 10px;
+      font-size: 16px; outline: none; font-family: inherit;
+    }
+    .editor-add-input:focus { border-color: var(--primary); }
+    .editor-add-btn {
+      padding: 11px 18px; background: var(--primary); color: white;
+      border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer;
+    }
+
+    @media print {
+      .report-header, .report-controls { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- 自動化用データ（スケジュールタスクがここを読み取る） -->
+<div id="auto-data"
+     data-count="0"
+     data-date=""
+     data-ready="false"
+     data-login-id=""
+     data-password=""
+     data-orders="[]">
+</div>
+
+<!-- ─── HEADER ─── -->
+<div class="header">
+  <div class="header-left">
+    <div class="title">🍱 マイ・コック弁当注文</div>
+    <div class="date-line" id="hdr-date"></div>
+  </div>
+  <button class="settings-btn" onclick="openSettings()" title="設定">⚙️</button>
+</div>
+
+<!-- ─── MAIN SCROLL ─── -->
+<div class="scroll-area">
+
+  <!-- Count Card -->
+  <div class="card count-card">
+    <div class="order-date-label" id="order-date-label">読み込み中…</div>
+    <div class="count-row">
+      <div class="count-number" id="total-count">0</div>
+      <div class="count-unit">個</div>
+    </div>
+    <div class="deadline-chip" id="deadline-chip">⏰ 締め切り：<strong>08:40</strong></div>
+    <div class="closed-notice" id="closed-notice">⏸ 受付時間外　12:45 から翌日注文受付開始</div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="card status-bar pending" id="status-bar">
+    📋 注文受付中
+  </div>
+
+  <!-- Picker Card -->
+  <div class="card picker-card">
+    <div class="picker-label">▲  名前を選んでください  ▼</div>
+    <div class="drum-wrapper">
+      <div class="drum-selector"></div>
+      <div class="drum-mask-top"></div>
+      <div class="drum-mask-bottom"></div>
+      <div class="drum-scroll" id="drum-scroll">
+        <!-- JS で生成 -->
+      </div>
+    </div>
+    <button class="add-btn" id="add-btn" onclick="addCurrentSelection()">
+      <span>＋</span>
+      <span id="add-btn-label">注文する</span>
+    </button>
+  </div>
+
+  <!-- Orders Card -->
+  <div class="card">
+    <div class="orders-header">
+      <div class="orders-title">📝 注文リスト</div>
+      <div class="orders-badge" id="orders-badge">0</div>
+    </div>
+    <div id="orders-list">
+      <div class="empty-msg">まだ注文がありません</div>
+    </div>
+  </div>
+
+  <!-- Send Button -->
+  <button class="send-btn" id="send-btn" onclick="handleSend()">
+    📤 マイ・コックへ送信
+  </button>
+
+  <div class="bottom-spacer"></div>
+</div><!-- end scroll-area -->
+
+
+<!-- ─── SETTINGS MODAL ─── -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModalOutside(event)">
+  <div class="modal-sheet">
+    <div class="modal-drag-bar"></div>
+    <div class="modal-title">⚙️ 設定</div>
+
+    <!-- Employee Master -->
+    <div class="section-label">👥 社員マスタ（SharePoint 同期）</div>
+    <div class="config-field">
+      <label>クライアントID（Azure AD アプリID）</label>
+      <input type="text" id="sp-client-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off">
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin:-6px 0 10px;line-height:1.5;">
+      ※ 勤怠管理アプリと同じクライアントIDを入力してください。
+    </div>
+    <button class="save-cfg-btn" style="background:#0078D4;" onclick="syncEmployeesFromSP()">☁️ SharePoint から社員データを同期</button>
+    <div id="emp-list-el" style="margin-top:10px;max-height:160px;overflow-y:auto;"></div>
+
+    <!-- MyCook Config -->
+    <div class="section-label">🔑 マイ・コック ログイン情報</div>
+    <div class="config-field">
+      <label>ログイン ID</label>
+      <input type="text" id="cfg-id" placeholder="ログインID" autocomplete="username">
+    </div>
+    <div class="config-field">
+      <label>パスワード</label>
+      <input type="password" id="cfg-pw" placeholder="パスワード" autocomplete="current-password">
+    </div>
+    <div class="config-field">
+      <label>自動送信時刻（平日のみ）</label>
+      <input type="time" id="cfg-time" value="08:45">
+    </div>
+    <button class="save-cfg-btn" onclick="saveConfig()">💾 設定を保存</button>
+
+    <!-- Order Editor -->
+    <div class="section-label">✏️ 注文リストの削除・追加・修正</div>
+    <div class="config-field">
+      <label>編集する日付</label>
+      <input type="date" id="edit-date">
+    </div>
+    <button class="save-cfg-btn" style="background:#2980B9;"
+            onclick="openOrderEditor()">📝 注文リストを編集する</button>
+
+    <!-- Monthly Report -->
+    <div class="section-label">📊 月次集計レポート（給料引き・20日締め）</div>
+    <div class="config-field">
+      <label>集計月</label>
+      <input type="month" id="report-month">
+    </div>
+    <button class="save-cfg-btn" style="background:#7D3C98;"
+            onclick="openReportModal()">📊 集計レポートを作成</button>
+
+    <!-- SharePoint Export -->
+    <div class="section-label">☁️ SharePoint へ保存</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6;">
+      全注文データを <code>bento_export.json</code> としてエクスポートします。<br>
+      その後 <code>sharepoint_upload.py</code> を実行すると<br>
+      SharePoint <strong>SharedResources/MyCook_OrderData/</strong> に Excel が保存されます。
+    </div>
+    <button class="save-cfg-btn" style="background:#1A6B3C;"
+            onclick="exportAllData()">📤 データをエクスポート（bento_export.json）</button>
+
+    <!-- Reset -->
+    <button class="reset-btn" onclick="resetToday()">🗑️ 本日の注文をリセット</button>
+  </div>
+</div>
+
+<!-- ─── MONTHLY REPORT MODAL ─── -->
+<div class="report-overlay" id="report-overlay">
+  <div class="report-inner">
+    <div class="report-header">
+      <div class="report-header-title">📊 月次集計レポート</div>
+      <button class="report-close-btn" onclick="closeReport()">✕</button>
+    </div>
+    <div class="report-controls">
+      <div class="report-period-label" id="report-period-label"></div>
+      <button class="report-print-btn" onclick="printReport()">🖨️ 印刷</button>
+    </div>
+    <div class="report-scroll">
+      <div id="report-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── ORDER EDITOR MODAL ─── -->
+<div class="editor-overlay" id="editor-overlay" onclick="closeEditorOutside(event)">
+  <div class="editor-sheet">
+    <div class="modal-drag-bar"></div>
+    <div class="modal-title">✏️ 注文リストの編集</div>
+    <div class="editor-date-label" id="editor-date-label"></div>
+    <div id="editor-list"></div>
+    <div class="editor-add-row">
+      <input type="text" class="editor-add-input" id="editor-add-input"
+             placeholder="名前を入力して追加" list="editor-datalist">
+      <datalist id="editor-datalist"></datalist>
+      <button class="editor-add-btn" onclick="editorAddOrder()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TOAST ─── -->
+<div class="toast" id="toast"></div>
+
+<!-- ─── SUCCESS POPUP ─── -->
+<div class="success-popup" id="success-popup">
+  <div class="success-box">
+    <div class="success-icon">✅</div>
+    <div class="success-title">送信完了！</div>
+    <div class="success-sub" id="success-sub"></div>
+    <button class="success-close" onclick="closeSuccessPopup()">閉じる</button>
+  </div>
+</div>
+
+
+<script>
+// ============================================================
+//  STORAGE HELPERS
+// ============================================================
+const KEY_EMP       = 'bento_employees';
+const KEY_CFG       = 'bento_config';
+const KEY_SP_CFG    = 'bento_sp_config';
+const SENT_PFX      = 'bento_sent_';
+const ORDER_PFX     = 'bento_orders_';
+
+// 時刻境界：8:40 締め切り / 12:45 翌日注文受付開始
+const CUTOFF_MINS   = 8  * 60 + 40;  // 520
+const NEXT_OPEN_MINS= 12 * 60 + 45;  // 765
+
+/** 現在時刻が「受付時間外（8:40〜12:45）」かどうか */
+function isClosedPeriod() {
+  const now  = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  return mins >= CUTOFF_MINS && mins < NEXT_OPEN_MINS;
+}
+
+/** 注文対象日を返す（12:45以降は翌日、それ以外は今日） */
+function getTargetDate() {
+  const now  = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  if (mins >= NEXT_OPEN_MINS) {
+    const t = new Date(now);
+    t.setDate(t.getDate() + 1);
+    return t;
+  }
+  return now;
+}
+
+function isTomorrow() {
+  const now  = new Date();
+  return now.getHours() * 60 + now.getMinutes() >= NEXT_OPEN_MINS;
+}
+
+function dateToStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function todayStr() {
+  return dateToStr(getTargetDate());
+}
+
+// Employees
+function loadEmployees() {
+  const s = localStorage.getItem(KEY_EMP);
+  return s ? JSON.parse(s) : [];
+}
+function saveEmployees(arr) {
+  localStorage.setItem(KEY_EMP, JSON.stringify(arr));
+}
+
+// Orders
+function loadOrders() {
+  const s = localStorage.getItem(ORDER_PFX + todayStr());
+  return s ? JSON.parse(s) : [];
+}
+function saveOrders(arr) {
+  localStorage.setItem(ORDER_PFX + todayStr(), JSON.stringify(arr));
+}
+
+// Config
+function loadConfig() {
+  const s = localStorage.getItem(KEY_CFG);
+  return s ? JSON.parse(s) : { id: '', pw: '', time: '08:45' };
+}
+function saveConfigData(obj) {
+  localStorage.setItem(KEY_CFG, JSON.stringify(obj));
+}
+
+// SharePoint config
+function loadSpConfig() {
+  const defaults = {
+    clientId:   '',
+    tenantId:   'e573394b-168c-4b01-8f03-d9b206401691',
+    spHost:     'mtd365.sharepoint.com',
+    sitePath:   '/sites/mtd',
+    masterPath: 'SharedResources/TimeAttendance/社員マスタ.xlsx'
+  };
+  try {
+    const s = localStorage.getItem(KEY_SP_CFG);
+    return s ? { ...defaults, ...JSON.parse(s) } : defaults;
+  } catch(e) { return defaults; }
+}
+function saveSpConfig(cfg) {
+  localStorage.setItem(KEY_SP_CFG, JSON.stringify(cfg));
+}
+
+// ============================================================
+//  MSAL 認証 & SharePoint 社員同期
+// ============================================================
+let _msalInstance = null;
+
+async function _initMsal(cfg) {
+  if (_msalInstance) return _msalInstance;
+  _msalInstance = new msal.PublicClientApplication({
+    auth: {
+      clientId:    cfg.clientId,
+      authority:   `https://login.microsoftonline.com/${cfg.tenantId}`,
+      redirectUri: window.location.href.split('?')[0].split('#')[0]
+    },
+    cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true }
+  });
+  return _msalInstance;
+}
+
+async function _getToken(msalInst, cfg) {
+  const SCOPES  = ['Files.Read', 'Sites.Read.All'];
+  const accounts = msalInst.getAllAccounts();
+  if (!accounts.length) {
+    await msalInst.loginRedirect({ scopes: SCOPES });
+    return null;  // page will redirect
+  }
+  try {
+    const res = await msalInst.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
+    return res.accessToken;
+  } catch(e) {
+    await msalInst.acquireTokenRedirect({ scopes: SCOPES, account: accounts[0] });
+    return null;
+  }
+}
+
+async function syncEmployeesFromSP() {
+  const clientIdEl = document.getElementById('sp-client-id');
+  const clientId   = clientIdEl ? clientIdEl.value.trim() : '';
+  const spCfg = loadSpConfig();
+  if (clientId) {
+    spCfg.clientId = clientId;
+    saveSpConfig(spCfg);
+  }
+  if (!spCfg.clientId) {
+    alert('クライアントIDを入力してください。\n勤怠管理アプリと同じIDを使用できます。');
+    return;
+  }
+  showToast('🔐 Microsoft 365 に接続中...');
+  try {
+    const msalInst = await _initMsal(spCfg);
+    // Handle any pending redirect result first
+    await msalInst.handleRedirectPromise();
+    const token = await _getToken(msalInst, spCfg);
+    if (!token) return;  // redirecting to login
+    await _doSyncEmployees(token, spCfg);
+  } catch(e) {
+    showToast('❌ ' + (e.message || '同期に失敗しました'));
+    console.error(e);
+  }
+}
+
+async function _doSyncEmployees(token, cfg) {
+  const G = 'https://graph.microsoft.com/v1.0';
+  const hdr = { Authorization: `Bearer ${token}` };
+
+  async function gGet(url) {
+    const r = await fetch(url, { headers: hdr });
+    if (!r.ok) throw new Error(`Graph ${r.status}: ${await r.text()}`);
+    return r.json();
+  }
+
+  showToast('📥 社員データを読み込み中...');
+
+  // Site
+  const site = await gGet(`${G}/sites/${cfg.spHost}:${cfg.sitePath}`);
+  // Drives
+  const { value: drives } = await gGet(`${G}/sites/${site.id}/drives`);
+
+  // Resolve master file
+  const parts   = cfg.masterPath.split('/');
+  const libName = parts[0];
+  const subPath = parts.slice(1).join('/');
+  const drive   = drives.find(d => d.name === libName || d.webUrl.split('/').pop() === libName);
+  let driveId, itemId;
+  if (drive) {
+    const item = await gGet(`${G}/drives/${drive.id}/root:/${subPath}`);
+    driveId = drive.id; itemId = item.id;
+  } else {
+    const item = await gGet(`${G}/sites/${site.id}/drive/root:/${cfg.masterPath}`);
+    driveId = item.parentReference.driveId; itemId = item.id;
+  }
+
+  // Read worksheet
+  const range = await gGet(`${G}/drives/${driveId}/items/${itemId}/workbook/worksheets('社員マスタ')/usedRange`);
+  const names = (range.values || []).slice(1)
+    .filter(r => r[0] && r[1])
+    .map(r => String(r[1]).trim());
+
+  saveEmployees(names);
+  buildDrum();
+  renderEmpList();
+  showToast(`✅ ${names.length}名の社員データを同期しました`);
+}
+
+// Sent flag
+function isSentToday() {
+  return localStorage.getItem(SENT_PFX + todayStr()) === '1';
+}
+function markSent() {
+  localStorage.setItem(SENT_PFX + todayStr(), '1');
+}
+
+
+// ============================================================
+//  DRUM PICKER
+// ============================================================
+const ITEM_H = 52;  // must match CSS .drum-item height
+const PAD_H  = 69;  // must match CSS .drum-pad height (to center first/last)
+
+let drumEl       = null;
+let currentIdx   = 0;
+let snapTimer    = null;
+
+function buildDrum() {
+  drumEl = document.getElementById('drum-scroll');
+  drumEl.innerHTML = '';
+
+  const emps = loadEmployees();
+  if (emps.length === 0) {
+    drumEl.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:14px;text-align:center;padding:20px;">設定 → SharePoint から<br>社員データを同期してください</div>';
+    return;
+  }
+
+  // top padding
+  const tp = document.createElement('div');
+  tp.className = 'drum-pad'; drumEl.appendChild(tp);
+
+  emps.forEach((name, i) => {
+    const el = document.createElement('div');
+    el.className = 'drum-item';
+    el.dataset.i = i;
+    el.textContent = name;
+    el.addEventListener('click', () => scrollTo(i));
+    drumEl.appendChild(el);
+  });
+
+  // bottom padding
+  const bp = document.createElement('div');
+  bp.className = 'drum-pad'; drumEl.appendChild(bp);
+
+  drumEl.addEventListener('scroll', onDrumScroll, { passive: true });
+
+  // initialise position
+  currentIdx = 0;
+  drumEl.scrollTop = 0;
+  updateDrumStyles();
+  updateAddBtn();
+}
+
+function scrollTo(idx) {
+  drumEl.scrollTo({ top: idx * ITEM_H, behavior: 'smooth' });
+}
+
+function onDrumScroll() {
+  updateDrumStylesRaw();
+  clearTimeout(snapTimer);
+  snapTimer = setTimeout(() => {
+    const raw = drumEl.scrollTop / ITEM_H;
+    const idx = Math.max(0, Math.min(Math.round(raw), loadEmployees().length - 1));
+    currentIdx = idx;
+    // enforce snap
+    if (Math.abs(drumEl.scrollTop - idx * ITEM_H) > 2) {
+      drumEl.scrollTo({ top: idx * ITEM_H, behavior: 'smooth' });
+    }
+    updateDrumStyles();
+    updateAddBtn();
+  }, 120);
+}
+
+function updateDrumStylesRaw() {
+  if (!drumEl) return;
+  const center = drumEl.scrollTop / ITEM_H;
+  drumEl.querySelectorAll('.drum-item').forEach(el => {
+    const dist = Math.abs(parseInt(el.dataset.i) - center);
+    el.classList.remove('is-center','is-near','is-far');
+    if (dist < 0.6)       el.classList.add('is-center');
+    else if (dist < 1.6)  el.classList.add('is-near');
+    else                   el.classList.add('is-far');
+    el.style.opacity = Math.max(0.25, 1 - dist * 0.28);
+  });
+}
+
+function updateDrumStyles() {
+  if (!drumEl) return;
+  drumEl.querySelectorAll('.drum-item').forEach(el => {
+    const dist = Math.abs(parseInt(el.dataset.i) - currentIdx);
+    el.classList.remove('is-center','is-near','is-far');
+    if (dist === 0)      el.classList.add('is-center');
+    else if (dist <= 1)  el.classList.add('is-near');
+    else                  el.classList.add('is-far');
+    el.style.opacity = dist === 0 ? 1 : dist === 1 ? 0.55 : 0.28;
+  });
+}
+
+function selectedName() {
+  const emps = loadEmployees();
+  return emps[currentIdx] || null;
+}
+
+function updateAddBtn() {
+  const name   = selectedName();
+  const orders = loadOrders();
+  const btn    = document.getElementById('add-btn');
+  const lbl    = document.getElementById('add-btn-label');
+  if (!name) { lbl.textContent = '注文する'; return; }
+
+  if (orders.includes(name)) {
+    btn.classList.add('already');
+    lbl.textContent = `${name} は注文済みです`;
+  } else {
+    btn.classList.remove('already');
+    lbl.textContent = `${name} の注文を追加`;
+  }
+}
+
+
+// ============================================================
+//  ORDER MANAGEMENT
+// ============================================================
+function addCurrentSelection() {
+  const name = selectedName();
+  if (!name) { showToast('名前が選択されていません'); return; }
+  if (isSentToday()) { showToast('本日の注文は送信済みです'); return; }
+
+  const orders = loadOrders();
+  if (orders.includes(name)) { showToast(`${name} はすでに注文済みです`); return; }
+  orders.push(name);
+  saveOrders(orders);
+  renderOrders();
+  updateAddBtn();
+  updateAutoData();
+  // animate count
+  document.getElementById('total-count').classList.remove('bump');
+  void document.getElementById('total-count').offsetWidth; // reflow
+  document.getElementById('total-count').classList.add('bump');
+  showToast(`✅ ${name} の注文を追加しました`);
+  if (navigator.vibrate) navigator.vibrate(30);
+}
+
+function removeOrder(name) {
+  if (!confirm(`「${name}」の注文をキャンセルしますか？`)) return;
+  const orders = loadOrders().filter(n => n !== name);
+  saveOrders(orders);
+  renderOrders();
+  updateAddBtn();
+  updateAutoData();
+  showToast(`${name} の注文をキャンセルしました`);
+}
+
+function renderOrders() {
+  const orders = loadOrders();
+  const listEl = document.getElementById('orders-list');
+  const badge  = document.getElementById('orders-badge');
+  const countEl= document.getElementById('total-count');
+
+  countEl.textContent = orders.length;
+  badge.textContent   = orders.length;
+
+  if (orders.length === 0) {
+    listEl.innerHTML = '<div class="empty-msg">まだ注文がありません</div>';
+    return;
+  }
+
+  listEl.innerHTML = orders.map(name => `
+    <div class="order-row">
+      <div class="order-name-text">🍱 ${esc(name)}</div>
+      <button class="cancel-btn" onclick="removeOrder('${esc(name)}')">キャンセル</button>
+    </div>
+  `).join('');
+}
+
+
+// ============================================================
+//  SEND
+// ============================================================
+function handleSend() {
+  const orders = loadOrders();
+  if (orders.length === 0) { showToast('注文がありません'); return; }
+  if (!confirm(`本日の弁当を ${orders.length} 個、マイ・コックへ送信します。\nよろしいですか？`)) return;
+  completeSend(orders.length);
+}
+
+function completeSend(count) {
+  markSent();
+  updateAutoData();
+
+  // UI
+  const sb = document.getElementById('status-bar');
+  sb.className = 'card status-bar sent';
+  sb.textContent = `✅ 本日 ${count} 個を送信済み`;
+
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  btn.textContent = '✅ 送信済み';
+  btn.classList.add('sent');
+
+  // Success popup
+  document.getElementById('success-sub').textContent = `${count} 個の注文をマイ・コックへ送信しました`;
+  document.getElementById('success-popup').classList.add('show');
+}
+
+function closeSuccessPopup() {
+  document.getElementById('success-popup').classList.remove('show');
+}
+
+
+// ============================================================
+//  AUTO-DATA (hidden element for scheduled task)
+// ============================================================
+function updateAutoData() {
+  const orders = loadOrders();
+  const cfg    = loadConfig();
+  const el     = document.getElementById('auto-data');
+  el.dataset.count    = orders.length;
+  el.dataset.date     = todayStr();
+  el.dataset.ready    = isSentToday() ? 'false' : orders.length > 0 ? 'true' : 'false';
+  el.dataset.loginId  = cfg.id  || '';
+  el.dataset.password = cfg.pw  || '';
+  el.dataset.orders   = JSON.stringify(orders);
+}
+
+
+// ============================================================
+//  SETTINGS
+// ============================================================
+function openSettings() {
+  renderEmpList();
+  const cfg   = loadConfig();
+  const spCfg = loadSpConfig();
+  document.getElementById('cfg-id').value       = cfg.id   || '';
+  document.getElementById('cfg-pw').value       = cfg.pw   || '';
+  document.getElementById('cfg-time').value     = cfg.time || '08:45';
+  document.getElementById('sp-client-id').value = spCfg.clientId || '';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+function closeModalOutside(e) {
+  if (e.target.id === 'modal-overlay') closeModal();
+}
+
+function renderEmpList() {
+  const emps  = loadEmployees();
+  const listEl= document.getElementById('emp-list-el');
+  if (emps.length === 0) {
+    listEl.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:6px 4px;">まだ同期されていません。上のボタンで同期してください。</div>';
+    return;
+  }
+  listEl.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">同期済み: ${emps.length}名</div>
+    ${emps.map(name => `
+      <div class="emp-row" style="pointer-events:none;">
+        <span class="emp-name">${esc(name)}</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+function saveConfig() {
+  const cfg = {
+    id:   document.getElementById('cfg-id').value.trim(),
+    pw:   document.getElementById('cfg-pw').value,
+    time: document.getElementById('cfg-time').value
+  };
+  saveConfigData(cfg);
+  closeModal();
+  updateAutoData();
+  showToast('✅ 設定を保存しました');
+}
+
+function resetToday() {
+  if (!confirm('本日の注文をすべてリセットしますか？')) return;
+  localStorage.removeItem(ORDER_PFX + todayStr());
+  localStorage.removeItem(SENT_PFX  + todayStr());
+  renderOrders();
+  updateAddBtn();
+  updateAutoData();
+  // reset send btn
+  const btn = document.getElementById('send-btn');
+  btn.disabled = false;
+  btn.textContent = '📤 マイ・コックへ送信';
+  btn.className = 'send-btn';
+  const sb = document.getElementById('status-bar');
+  sb.className = 'card status-bar pending';
+  sb.textContent = '📋 注文受付中';
+  closeModal();
+  showToast('リセットしました');
+}
+
+
+// ============================================================
+//  SHAREPOINT EXPORT（全注文データを JSON ダウンロード）
+// ============================================================
+
+function exportAllData() {
+  // localStorage から bento_orders_ で始まる全キーを収集
+  const orders = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(ORDER_PFX)) {
+      const dateStr = key.replace(ORDER_PFX, ''); // "YYYY-MM-DD"
+      const val = localStorage.getItem(key);
+      if (val) {
+        try { orders[dateStr] = JSON.parse(val); } catch {}
+      }
+    }
+  }
+
+  const payload = {
+    exported_at: new Date().toISOString(),
+    app_version: '1.0',
+    orders        // { "2026-04-01": ["田中","佐藤"], ... }
+  };
+
+  const blob = new Blob(
+    [JSON.stringify(payload, null, 2)],
+    { type: 'application/json' }
+  );
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href     = url;
+  a.download = 'bento_export.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  const days = Object.keys(orders).length;
+  closeModal();
+  showToast(`✅ ${days} 日分のデータをエクスポートしました`);
+}
+
+
+// ============================================================
+//  MONTHLY REPORT
+// ============================================================
+
+function openReportModal() {
+  const input = document.getElementById('report-month');
+  if (!input.value) {
+    // デフォルト：当月をセット
+    const n = new Date();
+    input.value = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;
+  }
+  const [year, month] = input.value.split('-').map(Number);
+  generateReport(year, month);
+  closeModal();
+}
+
+function generateReport(year, month) {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const employeeMap = {};   // name -> [count per day]
+  const dailyTotals = new Array(daysInMonth).fill(0);
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const orders = JSON.parse(localStorage.getItem(ORDER_PFX + key) || '[]');
+    orders.forEach(name => {
+      if (!employeeMap[name]) employeeMap[name] = new Array(daysInMonth).fill(0);
+      employeeMap[name][d - 1]++;
+      dailyTotals[d - 1]++;
+    });
+  }
+
+  const DOW = ['日','月','火','水','木','金','土'];
+  document.getElementById('report-period-label').textContent =
+    `${year}年${month}月　弁当注文集計（20日締め）`;
+
+  const employees = Object.keys(employeeMap).sort();
+  if (employees.length === 0) {
+    document.getElementById('report-content').innerHTML =
+      '<div class="report-empty">📭 この月のデータがありません</div>';
+    document.getElementById('report-overlay').classList.add('open');
+    return;
+  }
+
+  // 列ヘッダー（日付）
+  const dayHeaders = Array.from({length: daysInMonth}, (_, i) => {
+    const dow = new Date(year, month - 1, i + 1).getDay();
+    const cls = (dow === 0 || dow === 6) ? 'weekend-col' : '';
+    return `<th class="${cls}">${i + 1}<br><small>${DOW[dow]}</small></th>`;
+  }).join('');
+
+  // 社員行
+  const rows = employees.map(name => {
+    const counts = employeeMap[name];
+    const total  = counts.reduce((a, b) => a + b, 0);
+    const cells  = counts.map((c, i) => {
+      const dow = new Date(year, month - 1, i + 1).getDay();
+      const cls = (dow === 0 || dow === 6) ? 'weekend-col' : '';
+      return `<td class="${cls}${c > 0 ? ' ordered' : ''}">${c > 0 ? '〇' : ''}</td>`;
+    }).join('');
+    return `<tr><td class="name-col">${esc(name)}</td>${cells}<td class="total-col">${total}</td></tr>`;
+  }).join('');
+
+  // 日計行
+  const totalCells = dailyTotals.map((c, i) => {
+    const dow = new Date(year, month - 1, i + 1).getDay();
+    const cls = (dow === 0 || dow === 6) ? 'weekend-col' : '';
+    return `<td class="${cls}">${c > 0 ? c : ''}</td>`;
+  }).join('');
+  const grandTotal = dailyTotals.reduce((a, b) => a + b, 0);
+
+  document.getElementById('report-content').innerHTML = `
+    <table class="report-table">
+      <thead>
+        <tr>
+          <th class="name-col">社員名</th>
+          ${dayHeaders}
+          <th class="total-col">合計</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+        <tr class="total-row">
+          <td class="name-col">日計</td>
+          ${totalCells}
+          <td class="total-col">${grandTotal}</td>
+        </tr>
+      </tbody>
+    </table>`;
+
+  document.getElementById('report-overlay').classList.add('open');
+}
+
+function closeReport() {
+  document.getElementById('report-overlay').classList.remove('open');
+}
+
+function printReport() {
+  const period  = document.getElementById('report-period-label').textContent;
+  const content = document.getElementById('report-content').innerHTML;
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><title>${period}</title>
+<style>
+  body{font-family:-apple-system,'Hiragino Sans','Yu Gothic',sans-serif;padding:20px;}
+  h2{margin-bottom:14px;font-size:18px;}
+  table{border-collapse:collapse;font-size:12px;white-space:nowrap;}
+  th,td{border:1px solid #999;padding:5px 7px;text-align:center;min-width:26px;}
+  th{background:#EEE;font-weight:700;}
+  .name-col{text-align:left;min-width:70px;font-weight:600;}
+  .total-col{background:#FFF0E6;font-weight:800;color:#C45A18;}
+  .ordered{color:#C45A18;font-weight:700;}
+  .weekend-col{background:#FFFBE6;}
+  .total-row td{background:#EAF2FF;font-weight:700;}
+  @page{size:A4 landscape;margin:15mm;}
+</style></head><body>
+<h2>${period}</h2>${content}
+</body></html>`);
+  win.document.close();
+  setTimeout(() => win.print(), 400);
+}
+
+
+// ============================================================
+//  ORDER EDITOR
+// ============================================================
+
+let editorDateKey = '';
+
+function openOrderEditor() {
+  const input = document.getElementById('edit-date');
+  const target = getTargetDate();
+  const d = input.value
+    ? new Date(input.value + 'T00:00:00')
+    : target;
+  editorDateKey = dateToStr(d);
+
+  const DOW = ['日','月','火','水','木','金','土'];
+  document.getElementById('editor-date-label').textContent =
+    `${d.getMonth()+1}月${d.getDate()}日（${DOW[d.getDay()]}）の注文`;
+
+  // datalist に社員名をセット
+  document.getElementById('editor-datalist').innerHTML =
+    loadEmployees().map(n => `<option value="${esc(n)}">`).join('');
+
+  renderEditorList();
+  closeModal();
+  document.getElementById('editor-overlay').classList.add('open');
+}
+
+function closeEditor() {
+  document.getElementById('editor-overlay').classList.remove('open');
+  // 今日の注文を編集していた場合はメイン画面を更新
+  if (editorDateKey === todayStr()) {
+    renderOrders();
+    updateAddBtn();
+    updateAutoData();
+  }
+}
+
+function closeEditorOutside(e) {
+  if (e.target.id === 'editor-overlay') closeEditor();
+}
+
+function renderEditorList() {
+  const orders = JSON.parse(localStorage.getItem(ORDER_PFX + editorDateKey) || '[]');
+  const el = document.getElementById('editor-list');
+  if (orders.length === 0) {
+    el.innerHTML = '<div class="empty-msg">注文がありません</div>';
+    return;
+  }
+  el.innerHTML = orders.map((name, idx) => `
+    <div class="editor-row">
+      <div class="editor-name">🍱 ${esc(name)}</div>
+      <button class="editor-edit-btn" onclick="editorEdit(${idx})">✏️ 修正</button>
+      <button class="editor-del-btn"  onclick="editorDelete(${idx})">削除</button>
+    </div>`).join('');
+}
+
+function editorDelete(idx) {
+  const orders = JSON.parse(localStorage.getItem(ORDER_PFX + editorDateKey) || '[]');
+  if (!confirm(`「${orders[idx]}」を削除しますか？`)) return;
+  const name = orders.splice(idx, 1)[0];
+  localStorage.setItem(ORDER_PFX + editorDateKey, JSON.stringify(orders));
+  renderEditorList();
+  showToast(`${name} を削除しました`);
+}
+
+function editorEdit(idx) {
+  const orders = JSON.parse(localStorage.getItem(ORDER_PFX + editorDateKey) || '[]');
+  const oldName = orders[idx];
+  const newName = prompt(`「${oldName}」を変更後の名前に修正：`, oldName);
+  if (!newName || newName.trim() === oldName) return;
+  orders[idx] = newName.trim();
+  localStorage.setItem(ORDER_PFX + editorDateKey, JSON.stringify(orders));
+  renderEditorList();
+  showToast(`「${oldName}」→「${newName.trim()}」に修正しました`);
+}
+
+function editorAddOrder() {
+  const input = document.getElementById('editor-add-input');
+  const name  = input.value.trim();
+  if (!name) return;
+  const orders = JSON.parse(localStorage.getItem(ORDER_PFX + editorDateKey) || '[]');
+  if (orders.includes(name)) { showToast('同じ名前がすでにあります'); return; }
+  orders.push(name);
+  localStorage.setItem(ORDER_PFX + editorDateKey, JSON.stringify(orders));
+  input.value = '';
+  renderEditorList();
+  showToast(`「${name}」を追加しました`);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('editor-add-input').addEventListener('keypress', e => {
+    if (e.key === 'Enter') editorAddOrder();
+  });
+  // 編集日付のデフォルトを今日にセット
+  const n = new Date();
+  document.getElementById('edit-date').value = dateToStr(n);
+  // 集計月のデフォルトを当月にセット
+  document.getElementById('report-month').value =
+    `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;
+});
+
+
+// ============================================================
+//  AUTO SEND (8:50)
+// ============================================================
+function checkAutoSend() {
+  const cfg = loadConfig();
+  if (!cfg.time) return;
+  const [h, m] = cfg.time.split(':').map(Number);
+  const now = new Date();
+  if (now.getHours() === h && now.getMinutes() === m && !isSentToday()) {
+    const orders = loadOrders();
+    if (orders.length > 0) {
+      completeSend(orders.length);
+      showToast(`⏰ ${cfg.time} 自動送信: ${orders.length}個`);
+    }
+  }
+}
+
+
+// ============================================================
+//  UI HELPERS
+// ============================================================
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+function updateHeader() {
+  const d    = new Date();
+  const days = ['日','月','火','水','木','金','土'];
+  document.getElementById('hdr-date').textContent =
+    `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
+}
+
+/** 注文日ラベル・受付時間外バナー・送信ボタン・ステータスバーを一括更新 */
+function updateOrderDisplay() {
+  const target   = getTargetDate();
+  const days     = ['日','月','火','水','木','金','土'];
+  const closed   = isClosedPeriod();
+  const tomorrow = isTomorrow();
+
+  const dateLabel  = document.getElementById('order-date-label');
+  const deadlineEl = document.getElementById('deadline-chip');
+  const closedEl   = document.getElementById('closed-notice');
+  const addBtn     = document.getElementById('add-btn');
+  const sendBtn    = document.getElementById('send-btn');
+  const sb         = document.getElementById('status-bar');
+
+  const dateStr = `${target.getMonth()+1}月${target.getDate()}日（${days[target.getDay()]}）`;
+
+  if (closed) {
+    // 8:40〜12:45 受付時間外
+    dateLabel.textContent = `${dateStr}`;
+    dateLabel.className   = 'order-date-label';
+    dateLabel.style.color = 'var(--muted)';
+    deadlineEl.style.display = 'none';
+    closedEl.style.display   = 'flex';
+    addBtn.disabled          = true;
+    addBtn.style.opacity     = '0.4';
+    sendBtn.style.display    = 'none';
+    sb.className    = 'card status-bar pending';
+    sb.textContent  = '⏸ 受付時間外（12:45 から翌日注文受付開始）';
+  } else {
+    dateLabel.textContent    = tomorrow ? `${dateStr}　翌日` : dateStr;
+    dateLabel.className      = tomorrow ? 'order-date-label tomorrow' : 'order-date-label';
+    dateLabel.style.color    = '';
+    deadlineEl.style.display = 'inline-flex';
+    closedEl.style.display   = 'none';
+    addBtn.disabled          = false;
+    addBtn.style.opacity     = '1';
+    sendBtn.style.display    = 'flex';
+
+    // 送信済みでなければステータスを更新
+    if (!isSentToday()) {
+      sb.className   = 'card status-bar pending';
+      sb.textContent = tomorrow
+        ? `📋 翌日 ${dateStr} の注文受付中`
+        : '📋 注文受付中';
+    }
+  }
+
+  // 注文数も再描画（日付が変わった場合に備えて）
+  renderOrders();
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+
+// ============================================================
+//  INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  updateHeader();
+  updateOrderDisplay();   // 日付ラベル・状態を初期化
+  buildDrum();
+  renderOrders();
+  updateAutoData();
+
+  // restore sent state
+  if (isSentToday()) {
+    const target = getTargetDate();
+    const days   = ['日','月','火','水','木','金','土'];
+    const dateStr= `${target.getMonth()+1}月${target.getDate()}日（${days[target.getDay()]}）`;
+    const count  = loadOrders().length;
+    const btn    = document.getElementById('send-btn');
+    btn.disabled = true;
+    btn.textContent = '✅ 送信済み';
+    btn.classList.add('sent');
+    const sb = document.getElementById('status-bar');
+    sb.className = 'card status-bar sent';
+    sb.textContent = `✅ ${dateStr} ${count} 個を送信済み`;
+  }
+
+  // MSAL 起動時自動同期（社員データが空 or ログイン後リダイレクト時に実行）
+  const spCfg = loadSpConfig();
+  if (spCfg.clientId) {
+    _initMsal(spCfg).then(msalInst => {
+      msalInst.handleRedirectPromise().then(async result => {
+        const empEmpty = loadEmployees().length === 0;
+        if (result || empEmpty) {
+          // ログイン後リダイレクト or 社員データが空の場合に自動同期
+          try {
+            if (empEmpty) showToast('🔄 社員データを取得中...');
+            const token = await _getToken(msalInst, spCfg);
+            if (token) {
+              await _doSyncEmployees(token, spCfg);
+              buildDrum();
+            }
+          } catch(e) { console.warn('起動時自動同期:', e.message); }
+        }
+      }).catch(e => console.warn('MSAL redirect:', e.message));
+    }).catch(() => {});
+  }
+
+  // 毎分：自動送信チェック・日付ラベル更新・時間帯切替
+  setInterval(() => {
+    checkAutoSend();
+    updateHeader();
+    updateOrderDisplay();
+  }, 60_000);
+});
+</script>
+</body>
+</html>
