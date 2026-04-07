@@ -196,7 +196,7 @@
     /* Fade masks */
     .drum-mask-top, .drum-mask-bottom {
       position: absolute; left: 0; right: 0; height: 68px;
-      pointer-events: none; z-index: 2;
+      pointer-events: none; z-index: 3;
     }
     .drum-mask-top    { top: 0;    background: linear-gradient(to bottom, white 20%, transparent); }
     .drum-mask-bottom { bottom: 0; background: linear-gradient(to top,   white 20%, transparent); }
@@ -208,6 +208,8 @@
       scroll-snap-type: y mandatory;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
+      position: relative;
+      z-index: 2;
     }
     .drum-scroll::-webkit-scrollbar { display: none; }
 
@@ -225,7 +227,7 @@
     .drum-item.is-center {
       font-size: 26px;
       font-weight: 800;
-      color: var(--primary);
+      color: #1A1A1A;
     }
     .drum-item.is-near { font-size: 21px; font-weight: 500; color: #333; }
     .drum-item.is-far  { font-size: 17px; font-weight: 400; color: #777; }
